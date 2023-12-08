@@ -1,0 +1,1 @@
+cmd_/home/pi/final_project/gpiod_driver.ko := ld -r -EL -z noexecstack --build-id=sha1  -T scripts/module.lds -o /home/pi/final_project/gpiod_driver.ko /home/pi/final_project/gpiod_driver.o /home/pi/final_project/gpiod_driver.mod.o;  true

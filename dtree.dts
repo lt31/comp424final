@@ -1,0 +1,16 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    fragment@0 {
+        target-path="/";
+        __overlay__ {
+            leddev {
+                compatible = "leddriv";
+                led-gpios = <&gpio 5 0 >;
+                button-gpios = <&gpio 6 0 >;/home/pi/final_project
+            };
+        };
+    };
+
+};
