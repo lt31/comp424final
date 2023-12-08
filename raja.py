@@ -6,6 +6,7 @@ import time
 import time
 import board
 import adafruit_mcp4728
+import matplotlib.pyplot as plt
 
 
 MCP4728_DEFAULT_ADDRESS = 0x60
@@ -18,14 +19,14 @@ mcp4728 = adafruit_mcp4728.MCP4728(i2c, adafruit_mcp4728.MCP4728A4_DEFAULT_ADDRE
 # stop_drive = 25000
 
 # voltage
-init = 35300
-forward = 34500 #driving
+init = 35225
+forward = 34300 #driving
 stop_drive = 30000
 
 # wheel direction
 straight = 30000
-left = 16000 # 15000
-right = 49000 # 30000 to 65000
+left = 15500 # 15000
+right = 49500 
 
 passedStopLight = False
 atStopLight = False
@@ -306,6 +307,49 @@ def getBoundaries(filename):
         percentages = [lower_percent, upper_percent]
     return boundaries, percentages
 
+def plot_pd(p_vals, d_vals, error, show_img=False):
+    fig, ax1 = plt.subplots()
+    t_ax = np.arange(len(p_vals))
+    ax1.plot(t_ax, p_vals, '-', label="P values")
+    ax1.plot(t_ax, d_vals, '-', label="D values")
+    ax2 = ax1.twinx()
+    ax2.plot(t_ax, error, '--r', label="Error")
+
+    ax1.set_xlabel("Frames")
+    ax1.set_ylabel("PD Value")
+    ax2.set_ylim(-90, 90)
+    ax2.set_ylabel("Error Value")
+
+    plt.title("PD Values over time")
+    fig.legend()
+    fig.tight_layout()
+    plt.savefig("pd_plot.png")
+
+    if show_img:
+        plt.show()
+    plt.clf()
+
+
+def plot_pwm(speed_pwms, turn_pwms, error, show_img=False):
+    fig, ax1 = plt.subplots()
+    t_ax = np.arange(len(speed_pwms))
+    ax1.plot(t_ax, speed_pwms, '-', label="Speed PWM")
+    ax1.plot(t_ax, turn_pwms, '-', label="Steering PWM")
+    ax2 = ax1.twinx()
+    ax2.plot(t_ax, error, '--r', label="Error")
+
+    ax1.set_xlabel("Frames")
+    ax1.set_ylabel("PWM Values")
+    ax2.set_ylabel("Error Value")
+
+    plt.title("PWM Values over time")
+    fig.legend()
+    plt.savefig("pwm_plot.png")
+
+    if show_img:
+        plt.show()
+    plt.clf()
+
 video = cv2.VideoCapture(0)
 video.set(cv2.CAP_PROP_FRAME_WIDTH,320)
 video.set(cv2.CAP_PROP_FRAME_HEIGHT,240)
@@ -334,6 +378,11 @@ counter = 0
 mcp4728.channel_b.value = straight
 mcp4728.channel_c.value = init
 
+error_vals = []
+p_vals = []
+d_vals = []
+speed_vals = []
+steer_vals = []
 
 while True:
     ret,original_frame = video.read()
@@ -428,22 +477,32 @@ while True:
 
     if spd > 25:
         spd = 25
-        
+
+    error_vals.append(error)
+    p_vals.append(proportional)
+    d_vals.append(derivative)
+    speed_vals.append(mcp4728.channel_c.value )
+    steer_vals.append(mcp4728.channel_b.value )
+
     lastError = error
     lastTime = time.time()
         
     # out.write(frame)
     # out2.write(heading_image)
-
+    
     key = cv2.waitKey(1)
     if key == 27:
         break
 
     counter += 1
 
-    
-video.release()
 
+
+video.release()
 cv2.destroyAllWindows()
+
 mcp4728.channel_c.value = stop_drive
 mcp4728.channel_b.value = straight
+
+plot_pd(p_vals, d_vals, error_vals, True)
+plot_pwm(speed_vals, steer_vals, error_vals, True)
