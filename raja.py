@@ -1,3 +1,7 @@
+# User raja_961, “Autonomous Lane-Keeping Car Using Raspberry Pi and OpenCV”. 
+# Instructables. URL: https://www.instructables.com/Autonomous-Lane-Keeping-Car-U sing-Raspberry-Pi-and/
+# We also referenced code from here: https://github.com/EthanDP/424-lane-keeping-project/
+
 import cv2
 import numpy as np
 import math
