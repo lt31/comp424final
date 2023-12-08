@@ -9,8 +9,6 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 
-
-
 /* Declaration of variables */
 static struct gpio_desc *led_gpio, *button_gpio;
 static int button_irq;

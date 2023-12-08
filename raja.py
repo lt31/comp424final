@@ -8,30 +8,27 @@ import board
 import adafruit_mcp4728
 import matplotlib.pyplot as plt
 
-
 MCP4728_DEFAULT_ADDRESS = 0x60
 MCP4728A4_DEFAULT_ADDRESS = 0x64
 
-i2c = board.I2C()  # uses board.SCL and board.SDA
+# Initialize I2C bus and MCP4728 device
+i2c = board.I2C()  
 mcp4728 = adafruit_mcp4728.MCP4728(i2c, adafruit_mcp4728.MCP4728A4_DEFAULT_ADDRESS)
 
-# forward = 28500
-# stop_drive = 25000
+# Speed voltages
+init = 38000 
+forward = 37000 
+stop_drive = 33000
 
-# voltage
-init = 35225
-forward = 34300 #driving
-stop_drive = 30000
-
-# wheel direction
+# Wheel direction
 straight = 30000
-left = 15500 # 15000
+left = 15500 
 right = 49500 
 
-passedStopLight = False
-atStopLight = False
+# Boolean to keep track of stopping
 passedFirstStopSign = False
 
+# Detect the color blue to detect the edges 
 def detect_edges(frame):
     # filter for blue lane lines
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -47,16 +44,13 @@ def detect_edges(frame):
     
     return edges
 
+# Function that allows car to focus only on the lower half of the screen
 def region_of_interest(edges):
     height, width = edges.shape
     mask = np.zeros_like(edges)
 
     # only focus lower half of the screen
     polygon = np.array([[
-        # (0, height/4),
-        # (0,  3*height/4),
-        # (width , height/4),
-        # (width , 3*height/4),
         (0, height),
         (0, height / 2),
         (width, height / 2),
@@ -70,6 +64,7 @@ def region_of_interest(edges):
     
     return cropped_edges
 
+# Returns the endpoints of a line
 def detect_line_segments(cropped_edges):
     rho = 1  
     theta = np.pi / 180  
@@ -80,11 +75,11 @@ def detect_line_segments(cropped_edges):
 
     return line_segments
 
+#  Takes the frame under processing and lane segments detected using Hough transform and returns the average slope and intercept of two lane lines
 def average_slope_intercept(frame, line_segments):
     lane_lines = []
     
     if line_segments is None:
-        # print("no line segments detected")
         return lane_lines
 
     height, width,_ = frame.shape
@@ -98,7 +93,6 @@ def average_slope_intercept(frame, line_segments):
     for line_segment in line_segments:
         for x1, y1, x2, y2 in line_segment:
             if x1 == x2:
-                #print("skipping vertical lines (slope = infinity")
                 continue
             
             fit = np.polyfit((x1, x2), (y1, y2), 1)
@@ -175,9 +169,6 @@ def get_steering_angle(frame, lane_lines):
         _, _, left_x2, _ = lane_lines[0][0]
         _, _, right_x2, _ = lane_lines[1][0]
         mid = int(width / 2)
-        # print("left_x2", left_x2)
-        # print("right_x2", right_x2)
-        # print("mid", mid)
         x_offset = (left_x2 + right_x2) / 2 - mid
         y_offset = int(height / 2)
         
@@ -196,24 +187,8 @@ def get_steering_angle(frame, lane_lines):
     
     return steering_angle
 
-def go_faster():
-    mcp4728.channel_c.value = int(max(30000,mcp4728.channel_c.value + 100))
-    #print("fast",mcp4728.channel_c.value)
-def go_slower():
-    mcp4728.channel_c.value = int(mcp4728.channel_c.value - 1000)
-    #print("fast",mcp4728.channel_c.value)
-
-def getRedFloorBoundaries():
-    """
-    Gets the hsv boundaries and success boundaries indicating if the floor is red
-    :return: [[lower color and success boundaries for red floor], [upper color and success boundaries for red floor]]
-    """
-    return getBoundaries("final_project/vals.txt")
-
-
 def detect_stopsign(image):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    
     
     #red color has two ranges in hsv
     lower_red1 = np.array([0, 70, 20])
@@ -231,81 +206,8 @@ def detect_stopsign(image):
     red_pixels = np.count_nonzero(red)
     percent = (red_pixels / total_pixels) * 100
     if percent > 25:
-        print("percentage of red color: ", percent)
         return True
     return False
-
-def isRedFloorVisible(frame):
-    """
-    Detects whether or not the floor is red
-    :param frame: Image
-    :return: [(True is the camera sees a red on the floor, false otherwise), video output]
-    """
-    # print("Checking for floor stop")
-    boundaries = getRedFloorBoundaries()
-    return isMostlyColor(frame, boundaries)
-
-def isMostlyColor(image, boundaries):
-    """
-    Detects whether or not the majority of a color on the screen is a particular color
-    :param image:
-    :param boundaries: [[color boundaries], [success boundaries]]
-    :return: boolean if image satisfies provided boundaries, and an image used for debugging
-    """
-    #Convert to HSV color space
-    hsv_img = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-    #parse out the color boundaries and the success boundaries
-    color_boundaries = boundaries[0]
-    percentage = boundaries[1]
-
-    lower = np.array(color_boundaries[0])
-    upper = np.array(color_boundaries[1])
-    mask = cv2.inRange(hsv_img, lower, upper)
-    output = cv2.bitwise_and(hsv_img, hsv_img, mask=mask)
-
-    #Calculate what percentage of image falls between color boundaries
-    percentage_detected = np.count_nonzero(mask) * 100 / np.size(mask)
-    print("percentage color deteched")
-    # print("percentage_detected " + str(percentage_detected) + " lower " + str(lower) + " upper " + str(upper))
-    # If the percentage percentage_detected is betweeen the success boundaries, we return true, otherwise false for result
-    result = percentage[0] < percentage_detected <= percentage[1]
-    if result:
-        # print(percentage_detected)
-        pass
-    return result, output
-
-def getBoundaries(filename):
-    """
-    Reads the boundaries from the file filename
-    Format:
-        [0] lower: [H, S, V, lower percentage for classification of success]
-        [1] upper: [H, S, V, upper percentage for classification of success]
-    :param filename: file containing boundary information as above
-    :return: [[lower color and success boundaries], [upper color and success boundaries]]
-    """
-    default_lower_percent = 50
-    default_upper_percent = 100
-    with open(filename, "r") as f:
-        boundaries = f.readlines()
-        lower_data = [val for val in boundaries[0].split(",")]
-        upper_data = [val for val in boundaries[1].split(",")]
-
-        if len(lower_data) >= 4:
-            lower_percent = float(lower_data[3])
-        else:
-            lower_percent = default_lower_percent
-
-        if len(upper_data) >= 4:
-            upper_percent = float(upper_data[3])
-        else:
-            upper_percent = default_upper_percent
-
-        lower = [int(x) for x in lower_data[:3]]
-        upper = [int(x) for x in upper_data[:3]]
-        boundaries = [lower, upper]
-        percentages = [lower_percent, upper_percent]
-    return boundaries, percentages
 
 def plot_pd(p_vals, d_vals, error, show_img=False):
     fig, ax1 = plt.subplots()
@@ -356,10 +258,6 @@ video.set(cv2.CAP_PROP_FRAME_HEIGHT,240)
 
 time.sleep(1)
 
-# fourcc = cv2.VideoWriter_fourcc(*'XVID')
-# out = cv2.VideoWriter('Original15.avi',fourcc,10,(280,200))
-# out2 = cv2.VideoWriter('Direction15.avi',fourcc,10,(280,200))
-
 speed = 8
 lastTime = 0
 lastError = 0
@@ -374,7 +272,6 @@ isStopSignBool = False
 max_ticks = 2000
 counter = 0
 
-# mcp4728.channel_c.value = stop_drive
 mcp4728.channel_b.value = straight
 mcp4728.channel_c.value = init
 
@@ -402,54 +299,43 @@ while True:
 
     time_diff = 5
     
+    # Read the values outputted from the encoder to control voltages
     with open("/sys/module/gpiod_driver/parameters/elapsed_ms", "r") as filetoread:
         time_diff = int(filetoread.read()) / 100000
     if time_diff >= 30:
         mcp4728.channel_c.value = forward + 1000
-        print("fast",mcp4728.channel_c.value)
+        print("fast ", mcp4728.channel_c.value)
     elif time_diff < 30 and time_diff > 5:
         mcp4728.channel_c.value = forward - 1000
-        print("slow",mcp4728.channel_c.value)
+        print("slow ", mcp4728.channel_c.value)
 
     if ((counter + 1) % stopSignCheck) == 0:
         # check for the first stop sign
         if not passedFirstStopSign:
-            # print("hasn't detected first stop sign")
-            # isStopSignBool, floorSight = isRedFloorVisible(frame)
-            
+
             isStopSignBool = detect_stopsign(frame)
-            # print("current stop sign bool: ", isStopSignBool)
-            # if sightDebug:
-            #     cv2.imshow("floorSight", floorSight)
+
             if isStopSignBool:
-                print("detected first stop sign, stopping")
-                #stop()
+                print("DETECTED FIRST STOP SIGN, STOPPING")
                 mcp4728.channel_c.value = stop_drive
                 time.sleep(2)
                 passedFirstStopSign = True
+
                 # this is used to not check for the second stop sign until many frames later
                 secondStopSignTick = counter + 200
+
                 # now check for stop sign less frequently
                 stopSignCheck = 3
-                # add a delay to calling go faster
-                #go_faster_tick = counter + go_faster_tick_delay
-                print("first stop finished!")
+                print("FIRST STOP SIGN FINISHED, MOVING FORWARD")
                 mcp4728.channel_c.value = forward
                 mcp4728.channel_c.value = forward
                 mcp4728.channel_c.value = forward
-                # go_faster()
-                # go_faster()
-        # check for the second stop sign
-        # elif passedFirstStopSign and isRedFloorVisible(frame)[0]:
-        #         print("second stop sign detected, stopping")
-        #         mcp4728.channel_c.value = stop_drive
-        #         time.sleep(5)
-        #         break
+
         elif passedFirstStopSign and counter > secondStopSignTick:
             isStop2SignBool = detect_stopsign(frame)
             if isStop2SignBool:
                 # last stop sign detected, exits while loop
-                print("second stop sign detected, stopping")
+                print("DETECTED SECOND STOP SIGN, STOPPING")
                 mcp4728.channel_c.value = stop_drive
                 time.sleep(5)
                 break
@@ -486,9 +372,6 @@ while True:
 
     lastError = error
     lastTime = time.time()
-        
-    # out.write(frame)
-    # out2.write(heading_image)
     
     key = cv2.waitKey(1)
     if key == 27:
@@ -504,5 +387,6 @@ cv2.destroyAllWindows()
 mcp4728.channel_c.value = stop_drive
 mcp4728.channel_b.value = straight
 
+# Create plots
 plot_pd(p_vals, d_vals, error_vals, True)
 plot_pwm(speed_vals, steer_vals, error_vals, True)
