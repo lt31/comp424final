@@ -18,13 +18,14 @@ mcp4728 = adafruit_mcp4728.MCP4728(i2c, adafruit_mcp4728.MCP4728A4_DEFAULT_ADDRE
 # stop_drive = 25000
 
 # voltage
-forward = 33100 #driving
+init = 35300
+forward = 34500 #driving
 stop_drive = 30000
 
 # wheel direction
 straight = 30000
-left = 12000 # 0 - 9000
-right = 50000 # 30000 to 65000
+left = 16000 # 15000
+right = 49000 # 30000 to 65000
 
 passedStopLight = False
 atStopLight = False
@@ -82,7 +83,7 @@ def average_slope_intercept(frame, line_segments):
     lane_lines = []
     
     if line_segments is None:
-        print("no line segments detected")
+        # print("no line segments detected")
         return lane_lines
 
     height, width,_ = frame.shape
@@ -305,7 +306,6 @@ def getBoundaries(filename):
         percentages = [lower_percent, upper_percent]
     return boundaries, percentages
 
-
 video = cv2.VideoCapture(0)
 video.set(cv2.CAP_PROP_FRAME_WIDTH,320)
 video.set(cv2.CAP_PROP_FRAME_HEIGHT,240)
@@ -323,7 +323,6 @@ lastError = 0
 kp = 0.4
 kd = kp * 0.65
 
-
 stopSignCheck = 1
 sightDebug = False
 isStopSignBool = False
@@ -331,7 +330,10 @@ isStopSignBool = False
 max_ticks = 2000
 counter = 0
 
-mcp4728.channel_c.value = stop_drive
+# mcp4728.channel_c.value = stop_drive
+mcp4728.channel_b.value = straight
+mcp4728.channel_c.value = init
+
 
 while True:
     ret,original_frame = video.read()
@@ -349,35 +351,25 @@ while True:
 
     now = time.time()
 
-    time_diff = 7
+    time_diff = 5
     
     with open("/sys/module/gpiod_driver/parameters/elapsed_ms", "r") as filetoread:
-        time_diff = int(filetoread.read())
-
-    #print(time_diff)
-    # if time_diff >= 120:
-    #     go_faster()
-        
-    # elif time_diff <= 110 and time_diff > 7:
-    #     go_slower()
-    #     print("slow",mcp4728.channel_c.value)
-
-     # check for stop sign/traffic light every couple ticks
-
-    # if (counter % 5 == 0):
-    #     mcp4728.channel_c.value = stop_drive
-    # else:
-    mcp4728.channel_c.value = forward
-    #print("Speed: ", mcp4728.channel_c.value)
+        time_diff = int(filetoread.read()) / 100000
+    if time_diff >= 30:
+        mcp4728.channel_c.value = forward + 1000
+        print("fast",mcp4728.channel_c.value)
+    elif time_diff < 30 and time_diff > 5:
+        mcp4728.channel_c.value = forward - 1000
+        print("slow",mcp4728.channel_c.value)
 
     if ((counter + 1) % stopSignCheck) == 0:
         # check for the first stop sign
         if not passedFirstStopSign:
-            print("hasn't detected first stop sign")
+            # print("hasn't detected first stop sign")
             # isStopSignBool, floorSight = isRedFloorVisible(frame)
             
             isStopSignBool = detect_stopsign(frame)
-            print("current stop sign bool: ", isStopSignBool)
+            # print("current stop sign bool: ", isStopSignBool)
             # if sightDebug:
             #     cv2.imshow("floorSight", floorSight)
             if isStopSignBool:
@@ -394,6 +386,8 @@ while True:
                 #go_faster_tick = counter + go_faster_tick_delay
                 print("first stop finished!")
                 mcp4728.channel_c.value = forward
+                mcp4728.channel_c.value = forward
+                mcp4728.channel_c.value = forward
                 # go_faster()
                 # go_faster()
         # check for the second stop sign
@@ -403,7 +397,7 @@ while True:
         #         time.sleep(5)
         #         break
         elif passedFirstStopSign and counter > secondStopSignTick:
-            isStop2SignBool, _ = isRedFloorVisible(frame)
+            isStop2SignBool = detect_stopsign(frame)
             if isStop2SignBool:
                 # last stop sign detected, exits while loop
                 print("second stop sign detected, stopping")

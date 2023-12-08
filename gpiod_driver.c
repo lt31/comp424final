@@ -22,8 +22,7 @@ void onButtonPress(void) {
     ktime_t new_time = ktime_get();
     elapsed = ktime_sub(new_time, old_time);
     old_time = new_time;
-    elapsed_ms = elapsed;
-    //elapsed_ms = ktime_to_ns(elapsed) / 100000;
+    elapsed_ms = ktime_to_ns(elapsed);
 
     printk("Elapsed: %i\n", elapsed_ms);
 }
